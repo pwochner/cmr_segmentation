@@ -92,10 +92,9 @@ for epoch in range(num_epochs):
         if i % printfreq == printfreq-1:  
             print(epoch, i+1, running_loss / printfreq, flush=True)
             running_loss = 0 
-    
-    # save model 
-    # if epoch % printfreq == 0:
-    torch.save(unet_model.state_dict(),  'unet_conv_net_model'+str(epoch)+'.ckpt')
+     
+        if i % 50 == 0:
+            torch.save(unet_model.state_dict(),  'unet_conv_net_model'+str(epoch)+'_'+str(i)+'.ckpt')
 
 
 # # load model

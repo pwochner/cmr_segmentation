@@ -4,6 +4,7 @@ import numpy as np
 import nibabel as nib
 import pandas as pd
 import gryds
+import torch
 
 parent_path = os.path.dirname( os.getcwd() )
 data_path = os.path.join(parent_path, "labelled/")
@@ -21,7 +22,7 @@ def load_images(the_files, img_dim, nr_slices):
     for current_file in the_files:
         
         patient_img = nib.load(current_file).get_fdata()   
-
+    
         # find patient information using filename
         filename = os.path.basename(current_file)
         pos = filename.find("_")
@@ -40,7 +41,6 @@ def load_images(the_files, img_dim, nr_slices):
     
 
         idx_z = idx_z + 2*nr_slices
-
     return image_array
 
 
@@ -86,3 +86,36 @@ def data_augmentation(images, labels, how_many):
   
 
     return augmented_images, augmented_labels
+
+def preprocess_test(images):
+    images_test = np.zeros(images.shape)
+    for i in range(images.shape[2]) :
+        img = images[:,:,i] 
+        # normalise data
+        p5 = np.percentile(img,5)
+        p95 = np.percentile(img,95)
+        img = (img-p5) / (p95 - p5)
+        images_test[:,:,i] = img
+    return images_test
+
+def dice_metric(label, prediction,num_classes):
+    
+    # Computes the Dice overlap between two images
+    
+    # one hot encoding on label and predicition
+    label_one_hot = torch.nn.functional.one_hot(label.long(), num_classes)
+    label_one_hot = label_one_hot.numpy()
+    prediction_one_hot = torch.nn.functional.one_hot(prediction.long(), num_classes)
+    prediction_one_hot = prediction_one_hot.numpy()
+    # protection against division by zero
+    smooth = 1e-5
+    
+    tsum = label_one_hot[...,1].reshape(1, -1)
+    psum = prediction_one_hot[...,1].reshape(1, -1)
+    
+    intersection = np.multiply(tsum, psum)
+    sums = tsum + psum
+
+    score = 2.0 * (np.sum(intersection) + smooth/2.0) / (np.sum(sums) + smooth)
+
+    return score
