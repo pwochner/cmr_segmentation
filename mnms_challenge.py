@@ -16,11 +16,12 @@ import unet
 import helpers
 
 # hyperparameters
-num_epochs = 4
-batch_size = 32
-learning_rate = 0.0001
+NUM_EPOCHS = 4
+BATCH_SIZE = 32
+LEARNING_RATE = 0.0001
 IMG_DIM = 192
 
+# set seed for random shuffling of images
 random.seed(42)
 
 parent_path = os.path.dirname( os.getcwd() )
@@ -30,15 +31,14 @@ files_gt = glob.glob(os.path.join(data_path, '*_gt.nii.gz'))
 files_sa = glob.glob(os.path.join(data_path, '*_sa.nii.gz'))
 nr_patients = len(list( files_gt ) ) 
 
-nr_slices_list = []
+# store nr of slices for each patient in list
+nr_slices_list = [] 
 for i, current_file in enumerate(files_gt):
     patient_img = nib.load(current_file).get_fdata()
     nr_slices_list.append(patient_img.shape[2])
 
-# ======================================================================================
-# ==================| split data into training/validation/test | =======================
-# ======================================================================================
 
+# shuffle images and split into training/validation/test set
 c = list(zip(files_sa, files_gt, nr_slices_list))
 random.shuffle(c)
 files_sa_shuffled, files_gt_shuffled, nr_slices_list_shuffled = zip(*c)
@@ -55,49 +55,37 @@ train_gt = helpers.load_images(files_gt_train, IMG_DIM, 2*sum(nr_slices_train))
 validate_gt = helpers.load_images(files_gt_validate, IMG_DIM, 2*sum(nr_slices_validate))
 test_gt = helpers.load_images(files_gt_test, IMG_DIM, 2*sum(nr_slices_test))
 
+# data augmentation
 train_sa_augmented, train_gt_augmented = helpers.data_augmentation(train_sa, train_gt, 10)
 
+# add training data to pytorch dataset
 train_dataset = TensorDataset( torch.Tensor(train_sa_augmented), torch.Tensor(train_gt_augmented) )
-train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+train_dataloader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
 
-# plt.subplot(121)
-# plt.imshow(train_sa_augmented[:,:,1])
-# plt.subplot(122)
-# plt.imshow(train_gt_augmented[:,:,1])
-# plt.show()
       
-        
-# # # # ======================================================================================
-# # # # =============================| train network | =======================================
-# # # # ======================================================================================
-
-unet_model = unet.UNet(num_classes=4)
+# train network
+unet_model = unet.UNet(num_classes=4) # create an instance of the unet class
 loss_function = nn.CrossEntropyLoss() 
-optimizer = optim.Adam(unet_model.parameters(), lr=learning_rate)
+optimizer = optim.Adam(unet_model.parameters(), lr=LEARNING_RATE)
 
 running_loss = 0 
 printfreq = 1
 savefreq = 2
-for epoch in range(num_epochs):
+for epoch in range(NUM_EPOCHS):
     for i, data in enumerate(train_dataloader):
         inputs, labels = data
         optimizer.zero_grad()
-        outputs =unet_model(inputs) # forward prop
+        outputs =unet_model(inputs) # forward pass
         labels = labels.type(torch.LongTensor)
         loss = loss_function(outputs, labels)
-        loss.backward()
-        optimizer.step() 
+        loss.backward() # backpropagate loss
+        optimizer.step() # update weights
 
+        # keep track of running loss
         running_loss += loss.item()
         if i % printfreq == printfreq-1:  
             print(epoch, i+1, running_loss / printfreq, flush=True)
             running_loss = 0 
      
-        if i % 50 == 0:
-            torch.save(unet_model.state_dict(),  'unet_conv_net_model'+str(epoch)+'_'+str(i)+'.ckpt')
-
-
-# # load model
-# model = unet.UNet(num_classes=4)
-# model.load_state_dict(torch.load('unet_conv_net_model.ckpt'))
-# model.eval()
+        
+    torch.save(unet_model.state_dict(),  'unet_conv_net_model'+str(epoch)+'.ckpt') # save model every epoch
